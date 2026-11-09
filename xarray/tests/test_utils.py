@@ -24,17 +24,6 @@ from xarray.core.utils import (
 from xarray.tests import assert_array_equal, requires_dask
 
 
-class TestAlias:
-    def test(self):
-        def new_method():
-            pass
-
-        old_method = utils.alias(new_method, "old_method")
-        assert "deprecated" in old_method.__doc__  # type: ignore[operator]
-        with pytest.warns(Warning, match="deprecated"):
-            old_method()
-
-
 @pytest.mark.parametrize(
     ["a", "b", "expected"],
     [
@@ -457,6 +446,25 @@ def test_read_magic_number_from_file_short_reads() -> None:
 
 def test_try_read_magic_number_from_path_missing(tmp_path: Path) -> None:
     assert try_read_magic_number_from_path(tmp_path / "missing.nc") is None
+
+
+def test_try_read_magic_number_from_directory(tmp_path: Path) -> None:
+    assert try_read_magic_number_from_path(tmp_path) is None
+    assert try_read_magic_number_from_path(str(tmp_path)) is None
+
+
+def test_try_read_magic_number_permission_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "file.nc"
+    path.write_bytes(b"CDF")
+
+    def denied_open(*args: Any, **kwargs: Any) -> IO[Any]:
+        raise PermissionError("Access denied")
+
+    monkeypatch.setattr(utils, "open", denied_open, raising=False)
+    with pytest.raises(PermissionError, match="Access denied"):
+        try_read_magic_number_from_path(path)
 
 
 def test_try_read_magic_number_from_path_unbuffered(
